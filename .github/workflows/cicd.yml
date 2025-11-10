@@ -1,0 +1,67 @@
+name: CI/CD - Build & Deploy to GKE
+
+on:
+  workflow_dispatch:
+    inputs:
+      mensaje_del_dia:
+        description: "Mensaje del día (aparece bajo el H1)"
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: ${{ secrets.GCP_REGION }}
+      ARTIFACT_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}
+      CLUSTER_NAME: ${{ secrets.GKE_CLUSTER_NAME }}
+      CLUSTER_LOCATION: ${{ secrets.GKE_LOCATION }}
+      NAMESPACE: kanbista
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Define image tag
+        run: echo "IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/hello-node:${{ github.sha }}" >> $GITHUB_ENV
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push image (linux/amd64)
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg MENSAJE_DIA="${{ inputs.mensaje_del_dia }}" \
+            -t "${{ env.IMAGE }}" \
+            app \
+            --push
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ env.CLUSTER_LOCATION }}
+
+      - name: Update deployment image
+        run: |
+          kubectl -n "${{ env.NAMESPACE }}" set image deployment/hello-node hello-node="${{ env.IMAGE }}" --record
+          kubectl -n "${{ env.NAMESPACE }}" rollout status deployment/hello-node --timeout=180s
+

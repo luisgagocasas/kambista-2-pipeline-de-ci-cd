@@ -1,0 +1,13 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+crash.log
+app/node_modules/
+app/.npmrc
+.terraform*
+kubeconfig-kanbista.yaml
+**/*.cr
+terraform/*.json

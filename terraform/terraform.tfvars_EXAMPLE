@@ -1,0 +1,8 @@
+project_id = "123456"
+credentials_file_path = "123456.json"
+region = "us-central1"
+location = "us-central1-a"
+cluster_name = "kanbista-pruebatest5"
+artifact_registry_repo = "kanbista-apptest5"
+node_disk_type = "pd-standard"
+node_disk_size_gb = 50
