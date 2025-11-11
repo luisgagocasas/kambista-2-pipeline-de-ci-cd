@@ -79,12 +79,23 @@ jobs:
             app \
             --push
 
+      - name: Resolve GKE cluster location
+        run: |
+          set -e
+          echo "Resolviendo ubicación del clúster '${CLUSTER_NAME}' en el proyecto '${PROJECT_ID}'"
+          LOC=$(gcloud container clusters list --project "${PROJECT_ID}" --filter="name=${CLUSTER_NAME}" --format="value(location)")
+          if [ -z "$LOC" ]; then
+            echo "Cluster no encontrado: ${CLUSTER_NAME} en ${PROJECT_ID}"
+            exit 1
+          fi
+          echo "CLUSTER_LOCATION_RESOLVED=$LOC" >> $GITHUB_ENV
+
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v1
         with:
           project_id: ${{ env.PROJECT_ID }}
           cluster_name: ${{ env.CLUSTER_NAME }}
-          location: ${{ env.CLUSTER_LOCATION }}
+          location: ${{ env.CLUSTER_LOCATION_RESOLVED }}
 
       - name: Update deployment image
         run: |
