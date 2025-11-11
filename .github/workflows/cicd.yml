@@ -83,10 +83,15 @@ jobs:
         run: |
           set -e
           echo "Resolviendo ubicación del clúster '${CLUSTER_NAME}' en el proyecto '${PROJECT_ID}'"
-          LOC=$(gcloud container clusters list --project "${PROJECT_ID}" --filter="name=${CLUSTER_NAME}" --format="value(location)")
+          LOC=$(gcloud container clusters list --project "${PROJECT_ID}" --filter="name=${CLUSTER_NAME}" --format="value(location)" || true)
           if [ -z "$LOC" ]; then
-            echo "Cluster no encontrado: ${CLUSTER_NAME} en ${PROJECT_ID}"
-            exit 1
+            if [ -n "${CLUSTER_LOCATION}" ]; then
+              echo "No se pudo resolver automáticamente; usando CLUSTER_LOCATION proporcionado: ${CLUSTER_LOCATION}"
+              LOC="${CLUSTER_LOCATION}"
+            else
+              echo "Cluster no encontrado: ${CLUSTER_NAME} en ${PROJECT_ID}. Verifica el nombre del clúster y que Terraform haya creado el recurso."
+              exit 1
+            fi
           fi
           echo "CLUSTER_LOCATION_RESOLVED=$LOC" >> $GITHUB_ENV
 
