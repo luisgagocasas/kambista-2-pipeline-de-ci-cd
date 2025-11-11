@@ -33,7 +33,7 @@ Los secretos en GitHub (Settings → Secrets and variables → Actions):
 - `terraform -chdir=terraform apply -auto-approve`
 
 ## Paso 2: Docker
-Este paso se realiza ahora con GitHub Actions (ver sección CI/CD). No es necesario construir localmente.
+Este paso se realiza ahora con GitHub Actions.
 
 ## Paso 3: Kubeconfig
 - `terraform -chdir=terraform output -raw write_kubeconfig_cmd | bash`
@@ -61,3 +61,21 @@ Este paso se realiza ahora con GitHub Actions (ver sección CI/CD). No es necesa
 
 ## Borrado
 - `terraform -chdir=terraform destroy -auto-approve`
+
+### Solución de problemas CI/CD
+- Error `invalid_target` en `google-github-actions/auth`: verifique que el secreto `GCP_WORKLOAD_IDENTITY_PROVIDER` tenga el resource correcto:
+  `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider`.
+  Compruebe que existe y está habilitado:
+  ```bash
+  gcloud iam workload-identity-pools providers describe github-provider \
+    --project "$PROJECT_ID" --location=global \
+    --workload-identity-pool=github-pool
+  ```
+  Asegúrese que `attribute-condition` coincide exactamente con su repo: `assertion.repository=='<owner>/<repo>'`.
+  Si no coincide, actualice:
+  ```bash
+  gcloud iam workload-identity-pools providers update-oidc github-provider \
+    --project "$PROJECT_ID" --location=global \
+    --workload-identity-pool=github-pool \
+    --attribute-condition="assertion.repository=='<owner>/<repo>'"
+  ```
