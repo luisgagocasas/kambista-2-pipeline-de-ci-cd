@@ -39,7 +39,7 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.outcome != 'success' }}
+        if: ${{ steps.auth_wif.conclusion != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
@@ -48,6 +48,16 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
+
+      - name: Verify Google Cloud authentication
+        run: |
+          set -e
+          echo "Verificando autenticación de gcloud"
+          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" || true)
+          if [ -z "$ACTIVE" ]; then
+            echo "No hay cuenta activa en gcloud. Verifica WIF (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER) o define GCP_SA_KEY_JSON."
+            exit 1
+          fi
 
       - name: Ensure Artifact Registry repository exists
         run: |
@@ -98,7 +108,7 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.outcome != 'success' }}
+        if: ${{ steps.auth_wif.conclusion != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
@@ -107,6 +117,16 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
+
+      - name: Verify Google Cloud authentication
+        run: |
+          set -e
+          echo "Verificando autenticación de gcloud"
+          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" || true)
+          if [ -z "$ACTIVE" ]; then
+            echo "No hay cuenta activa en gcloud. Verifica WIF (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER) o define GCP_SA_KEY_JSON."
+            exit 1
+          fi
 
       - name: Resolve image
         run: echo "IMAGE=${{ needs.build.outputs.image }}" >> $GITHUB_ENV
