@@ -83,44 +83,69 @@ jobs:
       - name: Get GKE credentials
         run: |
           echo "=== Información de Configuración ==="
-          echo "Cluster Name: ${CLUSTER_NAME}"
-          echo "Location: ${CLUSTER_LOCATION}"
-          echo "Project ID: ${PROJECT_ID}"
+          echo "Cluster Name desde secret: '${CLUSTER_NAME}'"
+          echo "Location desde secret: '${CLUSTER_LOCATION}'"
+          echo "Project ID desde secret: '${PROJECT_ID}'"
+          echo "Longitud del nombre: ${#CLUSTER_NAME}"
           echo ""
           
-          echo "=== Listando todos los clusters ==="
+          echo "=== Listando todos los clusters en formato detallado ==="
           gcloud container clusters list --project=${PROJECT_ID} --format="table(name,location,status)"
           echo ""
           
-          echo "=== Buscando cluster exacto ==="
+          echo "=== Obteniendo lista de nombres exactos ==="
+          ALL_CLUSTERS=$(gcloud container clusters list --project=${PROJECT_ID} --format="value(name)")
+          echo "Clusters encontrados:"
+          echo "$ALL_CLUSTERS"
+          echo ""
+          
+          echo "=== Comparando nombres ==="
+          echo "Buscando: '${CLUSTER_NAME}'"
+          
+          # Intentar encontrar el cluster (case-sensitive)
           CLUSTER_INFO=$(gcloud container clusters list --project=${PROJECT_ID} \
             --filter="name=${CLUSTER_NAME}" \
-            --format="value(name,location)" 2>/dev/null || echo "")
+            --format="value(name,location)" 2>/dev/null)
           
           if [ -z "$CLUSTER_INFO" ]; then
-            echo "ERROR: No se encontró ningún cluster con el nombre: ${CLUSTER_NAME}"
+            echo "❌ No se encontró cluster con nombre exacto: '${CLUSTER_NAME}'"
             echo ""
-            echo "Clusters disponibles:"
-            gcloud container clusters list --project=${PROJECT_ID} --format="value(name)"
-            exit 1
+            echo "Intentando búsqueda parcial..."
+            
+            # Si hay solo un cluster, usarlo
+            CLUSTER_COUNT=$(echo "$ALL_CLUSTERS" | wc -l | tr -d ' ')
+            if [ "$CLUSTER_COUNT" -eq 1 ]; then
+              FOUND_NAME=$(echo "$ALL_CLUSTERS" | head -1)
+              echo "⚠️  Solo hay 1 cluster disponible, usando: '${FOUND_NAME}'"
+              
+              CLUSTER_INFO=$(gcloud container clusters list --project=${PROJECT_ID} \
+                --filter="name=${FOUND_NAME}" \
+                --format="value(name,location)")
+            else
+              echo "ERROR: Hay múltiples clusters. Especifica el nombre exacto."
+              echo "Nombres disponibles:"
+              echo "$ALL_CLUSTERS"
+              exit 1
+            fi
           fi
           
           FOUND_NAME=$(echo "$CLUSTER_INFO" | awk '{print $1}')
           FOUND_LOCATION=$(echo "$CLUSTER_INFO" | awk '{print $2}')
           
-          echo "Cluster encontrado:"
-          echo "  Nombre: ${FOUND_NAME}"
-          echo "  Ubicación: ${FOUND_LOCATION}"
+          echo ""
+          echo "✅ Cluster seleccionado:"
+          echo "  Nombre: '${FOUND_NAME}'"
+          echo "  Ubicación: '${FOUND_LOCATION}'"
           echo ""
           
-          # Detectar si es zona o región (zonas tienen formato: us-central1-a, regiones: us-central1)
+          # Detectar si es zona o región
           if [[ "${FOUND_LOCATION}" == *-[a-z] ]]; then
-            echo "Tipo: Zonal"
+            echo "Tipo: Cluster Zonal"
             gcloud container clusters get-credentials ${FOUND_NAME} \
               --zone=${FOUND_LOCATION} \
               --project=${PROJECT_ID}
           else
-            echo "Tipo: Regional"
+            echo "Tipo: Cluster Regional"
             gcloud container clusters get-credentials ${FOUND_NAME} \
               --region=${FOUND_LOCATION} \
               --project=${PROJECT_ID}
