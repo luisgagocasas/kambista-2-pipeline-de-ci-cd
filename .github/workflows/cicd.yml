@@ -1,8 +1,6 @@
 name: CI/CD - Build & Deploy to GKE
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       mensaje_del_dia:
