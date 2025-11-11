@@ -6,9 +6,6 @@ on:
       mensaje_del_dia:
         description: "Mensaje del día"
         required: false
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -85,9 +82,28 @@ jobs:
 
       - name: Get GKE credentials
         run: |
-          gcloud container clusters get-credentials ${CLUSTER_NAME} \
-            --zone=${CLUSTER_LOCATION} \
-            --project=${PROJECT_ID}
+          echo "Obteniendo credenciales del cluster: ${CLUSTER_NAME}"
+          echo "Ubicación: ${CLUSTER_LOCATION}"
+          echo "Proyecto: ${PROJECT_ID}"
+          
+          # Intentar primero como zona
+          if gcloud container clusters describe ${CLUSTER_NAME} --zone=${CLUSTER_LOCATION} --project=${PROJECT_ID} >/dev/null 2>&1; then
+            echo "Cluster encontrado en zona: ${CLUSTER_LOCATION}"
+            gcloud container clusters get-credentials ${CLUSTER_NAME} \
+              --zone=${CLUSTER_LOCATION} \
+              --project=${PROJECT_ID}
+          # Si no, intentar como región
+          elif gcloud container clusters describe ${CLUSTER_NAME} --region=${CLUSTER_LOCATION} --project=${PROJECT_ID} >/dev/null 2>&1; then
+            echo "Cluster encontrado en región: ${CLUSTER_LOCATION}"
+            gcloud container clusters get-credentials ${CLUSTER_NAME} \
+              --region=${CLUSTER_LOCATION} \
+              --project=${PROJECT_ID}
+          else
+            echo "ERROR: No se pudo encontrar el cluster ${CLUSTER_NAME} en ${CLUSTER_LOCATION}"
+            echo "Listando clusters disponibles:"
+            gcloud container clusters list --project=${PROJECT_ID}
+            exit 1
+          fi
 
       - name: Verify kubectl access
         run: |
