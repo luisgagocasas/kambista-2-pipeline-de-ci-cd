@@ -1,7 +1,7 @@
 # Infraestructura con Terraform y GKE
 
 ## Guía de ejecución manual
-Esta guía lista únicamente los pasos que tú ejecutas de forma manual. El pipeline de GitHub Actions se encarga de construir la imagen, publicar en Artifact Registry y desplegar en GKE.
+El pipeline de GitHub Actions se encarga de construir la imagen, publicar en Artifact Registry y desplegar en GKE.
 
 ### Requisitos previos
 - Terraform `>= 1.6` y provider `google >= 5.0`.
