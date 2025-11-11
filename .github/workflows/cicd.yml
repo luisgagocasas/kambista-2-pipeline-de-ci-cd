@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup gcloud SDK (install only)
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Auth to Google Cloud (Workload Identity Federation)
         id: auth_wif
         continue-on-error: true
@@ -36,16 +39,22 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      - name: Probe WIF credentials
+        id: probe_wif
+        continue-on-error: true
+        run: |
+          set -e
+          gcloud --quiet config set project "${PROJECT_ID}"
+          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.conclusion != 'success' }}
+        if: ${{ steps.auth_wif.conclusion != 'success' || steps.probe_wif.conclusion != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Setup gcloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+      - name: Set gcloud project
+        run: gcloud --quiet config set project "${PROJECT_ID}"
 
       - name: Verify Google Cloud authentication
         run: |
@@ -97,6 +106,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup gcloud SDK (install only)
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Auth to Google Cloud (Workload Identity Federation)
         id: auth_wif
         continue-on-error: true
@@ -105,16 +117,22 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      - name: Probe WIF credentials
+        id: probe_wif
+        continue-on-error: true
+        run: |
+          set -e
+          gcloud --quiet config set project "${PROJECT_ID}"
+          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.conclusion != 'success' }}
+        if: ${{ steps.auth_wif.conclusion != 'success' || steps.probe_wif.conclusion != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Setup gcloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+      - name: Set gcloud project
+        run: gcloud --quiet config set project "${PROJECT_ID}"
 
       - name: Verify Google Cloud authentication
         run: |
