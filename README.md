@@ -10,6 +10,7 @@ Esta guía lista únicamente los pasos que tú ejecutas de forma manual. El pipe
 - Secrets en GitHub (Settings → Secrets and variables → Actions):
   - `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_ARTIFACT_REPO`, `GKE_CLUSTER_NAME`, `GKE_LOCATION`, `GCP_SERVICE_ACCOUNT`, `K8S_NAMESPACE`.
   - `GCP_WORKLOAD_IDENTITY_PROVIDER` con `projectNumber`: `projects/668774990103/locations/global/workloadIdentityPools/github-pool/providers/github-provider`.
+  - Opcional (fallback si falla WIF): `GCP_SA_KEY_JSON` con el contenido de la llave JSON de la service account.
 
 ### Paso 1: Terraform (infraestructura)
 - `terraform -chdir=terraform init`
@@ -31,6 +32,8 @@ Nota: usa `kubectl` nuevamente solo si cambias los manifiestos en `k8s/`.
 ### Paso 4: Ejecutar el workflow (cada despliegue)
 - En GitHub → Actions → "CI/CD - Build & Deploy to GKE" → "Run workflow".
 - Selecciona `branch` y escribe `mensaje_del_dia`.
+
+Nota: el workflow intenta autenticarse primero con Workload Identity Federation. Si falla, usa el secret `GCP_SA_KEY_JSON` como fallback para garantizar el despliegue.
 
 ### Acceso (opcional)
 - IP del Ingress: `kubectl --kubeconfig ./kubeconfig-kanbista.yaml get ingress hello-node-ingress -n kanbista -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`
