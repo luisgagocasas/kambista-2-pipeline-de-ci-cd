@@ -49,6 +49,9 @@ jobs:
           echo "=== Build Information ==="
           echo "Building image: ${IMAGE_TAG}"
           echo "GITHUB_SHA: ${GITHUB_SHA}"
+          echo "PROJECT_ID: ${PROJECT_ID}"
+          echo "REGION: ${REGION}"
+          echo "ARTIFACT_REPO: ${ARTIFACT_REPO}"
           echo ""
           
           docker build \
@@ -59,10 +62,26 @@ jobs:
           
           docker push "${IMAGE_TAG}"
           
+          # Set output usando el método correcto
           echo "image=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          
+          # Verificar que se guardó correctamente
           echo ""
           echo "✅ Image pushed successfully: ${IMAGE_TAG}"
-          echo "✅ Output set: image=${IMAGE_TAG}"
+          echo "✅ Setting output 'image' to: ${IMAGE_TAG}"
+          echo "📝 GITHUB_OUTPUT file contents:"
+          cat $GITHUB_OUTPUT
+          
+      - name: Verify build output
+        run: |
+          echo "=== Verificación de Output del Build ==="
+          echo "Output 'image' del step anterior: '${{ steps.build_push.outputs.image }}'"
+          if [ -z "${{ steps.build_push.outputs.image }}" ]; then
+            echo "❌ ERROR: El output 'image' está vacío!"
+            exit 1
+          else
+            echo "✅ Output verificado correctamente"
+          fi
 
   deploy:
     name: Deploy to GKE
@@ -72,15 +91,22 @@ jobs:
     steps:
       - name: Debug - Check build outputs
         run: |
-          IMAGE="${{ needs.build.outputs.image }}"
-          echo "=== Verificando outputs del job build ==="
-          echo "Imagen recibida: '${IMAGE}'"
-          echo "Longitud: ${#IMAGE}"
+          echo "=== DEBUG COMPLETO - Outputs del Job Build ==="
+          echo "needs.build.outputs.image (directo): '${{ needs.build.outputs.image }}'"
+          echo "needs.build.result: '${{ needs.build.result }}'"
           echo ""
+          
+          IMAGE="${{ needs.build.outputs.image }}"
+          echo "Variable IMAGE asignada: '${IMAGE}'"
+          echo "Longitud de IMAGE: ${#IMAGE}"
+          echo ""
+          
           if [ -z "${IMAGE}" ]; then
-            echo "⚠️  ADVERTENCIA: La imagen está vacía"
+            echo "❌ CRÍTICO: La imagen está vacía"
+            echo "El job build debe haber fallado o el output no se configuró correctamente"
+            exit 1
           else
-            echo "✅ Imagen válida recibida"
+            echo "✅ Imagen válida recibida del job build"
           fi
 
       - name: Checkout code
@@ -181,46 +207,57 @@ jobs:
           kubectl get namespace ${NAMESPACE} || kubectl create namespace ${NAMESPACE}
 
       - name: Deploy to Kubernetes
+        env:
+          IMAGE_URL: ${{ needs.build.outputs.image }}
         run: |
-          IMAGE="${{ needs.build.outputs.image }}"
-          
-          echo "=== Información de Deploy ==="
-          echo "Imagen a desplegar: ${IMAGE}"
+          echo "=== DEBUG - Variables de Deployment ==="
+          echo "IMAGE_URL (desde env): '${IMAGE_URL}'"
+          echo "needs.build.outputs.image (directo): '${{ needs.build.outputs.image }}'"
           echo "Namespace: ${NAMESPACE}"
           echo ""
           
-          if [ -z "${IMAGE}" ]; then
-            echo "❌ ERROR: La variable IMAGE está vacía"
-            echo "Build output recibido: '${{ needs.build.outputs.image }}'"
-            echo "Verifica que el job build haya completado correctamente"
+          # Usar la variable de entorno
+          if [ -z "${IMAGE_URL}" ]; then
+            echo "❌ ERROR CRÍTICO: La variable IMAGE_URL está vacía"
+            echo "needs.build.outputs.image value: '${{ needs.build.outputs.image }}'"
+            echo "needs.build.result: '${{ needs.build.result }}'"
+            echo ""
+            echo "Esto indica que el output del job build no se configuró correctamente."
+            echo "Revisa los logs del job build para asegurarte que:"
+            echo "  1. El comando 'echo image=...' se ejecutó correctamente"
+            echo "  2. El archivo GITHUB_OUTPUT se escribió correctamente"
+            echo "  3. No hubo errores en el paso de build"
             exit 1
           fi
           
+          echo "✅ Imagen válida recibida: ${IMAGE_URL}"
+          echo ""
+          
           # Apply namespace
-          echo "Aplicando namespace..."
+          echo "📦 Aplicando namespace..."
           kubectl apply -f k8s/namespace.yaml
           
           # Apply service first
-          echo "Aplicando service..."
+          echo "🔌 Aplicando service..."
           kubectl apply -f k8s/service.yaml -n ${NAMESPACE}
           
           # Apply deployment
-          echo "Aplicando deployment..."
+          echo "🚀 Aplicando deployment..."
           kubectl apply -f k8s/deployment.yaml -n ${NAMESPACE}
           
           # Update the image in deployment
-          echo "Actualizando imagen del deployment a: ${IMAGE}"
-          kubectl set image deployment/hello-node hello-node="${IMAGE}" -n ${NAMESPACE}
+          echo "🔄 Actualizando imagen del deployment a: ${IMAGE_URL}"
+          kubectl set image deployment/hello-node hello-node="${IMAGE_URL}" -n ${NAMESPACE}
           
           # Apply ingress if exists
           if [ -f k8s/ingress.yaml ]; then
-            echo "Aplicando ingress..."
+            echo "🌐 Aplicando ingress..."
             kubectl apply -f k8s/ingress.yaml -n ${NAMESPACE}
           fi
           
           echo ""
           echo "✅ Manifiestos aplicados exitosamente"
-          echo "✅ Imagen desplegada: ${IMAGE}"
+          echo "✅ Imagen desplegada: ${IMAGE_URL}"
 
       - name: Wait for rollout
         run: |
