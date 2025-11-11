@@ -140,20 +140,36 @@ jobs:
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/service.yaml -n ${NAMESPACE}
           kubectl apply -f k8s/deployment.yaml -n ${NAMESPACE}
+          
+          echo "Updating deployment with new image: ${IMAGE_TAG}"
           kubectl set image deployment/hello-node hello-node="${IMAGE_TAG}" -n ${NAMESPACE}
+          
+          echo "Forcing rollout restart to pull new image"
+          kubectl rollout restart deployment/hello-node -n ${NAMESPACE}
           
           if [ -f k8s/ingress.yaml ]; then
             kubectl apply -f k8s/ingress.yaml -n ${NAMESPACE}
           fi
           
-          echo "Deployment completed successfully"
+          echo "Deployment update initiated"
 
       - name: Wait for rollout
         run: |
+          echo "Waiting for rollout to complete..."
           kubectl rollout status deployment/hello-node -n ${NAMESPACE} --timeout=300s
+          echo "Rollout completed successfully"
 
       - name: Get deployment status
         run: |
+          echo "Deployment status:"
           kubectl get deployment hello-node -n ${NAMESPACE}
+          echo ""
+          echo "Pods:"
           kubectl get pods -n ${NAMESPACE} -l app=hello-node
+          echo ""
+          echo "Service:"
           kubectl get service hello-node -n ${NAMESPACE}
+          echo ""
+          echo "Current image in deployment:"
+          kubectl get deployment hello-node -n ${NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo ""

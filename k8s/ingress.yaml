@@ -4,13 +4,20 @@ metadata:
   name: hello-node-ingress
   namespace: kanbista
   annotations:
-    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: ""
+    networking.gke.io/managed-certificates: ""
 spec:
+  defaultBackend:
+    service:
+      name: hello-node
+      port:
+        number: 80
   rules:
   - http:
       paths:
-      - path: /
-        pathType: Prefix
+      - path: /*
+        pathType: ImplementationSpecific
         backend:
           service:
             name: hello-node

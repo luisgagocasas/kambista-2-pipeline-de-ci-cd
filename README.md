@@ -33,14 +33,6 @@ Nota: usa `kubectl` nuevamente solo si cambias los manifiestos en `k8s/`.
 - En GitHub → Actions → "CI/CD - Build & Deploy to GKE" → "Run workflow".
 - Selecciona `branch` y escribe `mensaje_del_dia`.
 
-Nota: el workflow intenta autenticarse primero con Workload Identity Federation. Si falla, usa el secret `GCP_SA_KEY_JSON` como fallback para garantizar el despliegue.
-
-Actualización importante (CI/CD):
-- Se corrigió la lógica de fallback para que se active cuando falle la autenticación WIF (usando `steps.<id>.outcome` en lugar de `conclusion`).
-- La verificación de autenticación ahora usa `gcloud config get-value account` para evitar warnings y detectar correctamente si hay cuenta activa.
-- Asegúrate de que `GCP_WORKLOAD_IDENTITY_PROVIDER` tenga formato válido: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<POOL_ID>/providers/<PROVIDER_ID>` y que el provider esté habilitado.
-- Si WIF no está disponible, define `GCP_SA_KEY_JSON` con la llave JSON de la service account indicada por `GCP_SERVICE_ACCOUNT`.
-
 ### Acceso (opcional)
 - IP del Ingress: `kubectl --kubeconfig ./kubeconfig-kanbista.yaml get ingress hello-node-ingress -n kanbista -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`
 - Abre `http://<INGRESS_IP>/`.
@@ -51,6 +43,10 @@ Actualización importante (CI/CD):
 - `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista rollout status deploy/hello-node`: sigue el estado del despliegue hasta completar.
 - `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista logs -f deploy/hello-node`: tail de logs de la aplicación durante el despliegue.
 - `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista get events --sort-by=.lastTimestamp`: revisa eventos recientes para diagnosticar rápidamente.
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml describe ingress hello-node-ingress -n kanbista`: Verificar el estado de ingress
+
+
+- `curl -v http://<IP>/ --connect-timeout 10`: probar url
 
 ### Borrado (opcional)
 - `terraform -chdir=terraform destroy -auto-approve`
