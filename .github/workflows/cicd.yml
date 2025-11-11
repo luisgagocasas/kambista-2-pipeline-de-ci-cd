@@ -54,6 +54,16 @@ jobs:
           echo "ARTIFACT_REPO: ${ARTIFACT_REPO}"
           echo ""
           
+          # Verificar que GITHUB_OUTPUT existe
+          echo "📝 Verificando GITHUB_OUTPUT:"
+          echo "GITHUB_OUTPUT value: ${GITHUB_OUTPUT}"
+          if [ -z "${GITHUB_OUTPUT}" ]; then
+            echo "❌ ERROR: GITHUB_OUTPUT no está definido"
+            exit 1
+          fi
+          echo "GITHUB_OUTPUT file exists: $(test -f ${GITHUB_OUTPUT} && echo 'yes' || echo 'no')"
+          echo ""
+          
           docker build \
             --build-arg MENSAJE_DIA="${{ inputs.mensaje_del_dia }}" \
             -t "${IMAGE_TAG}" \
@@ -62,26 +72,46 @@ jobs:
           
           docker push "${IMAGE_TAG}"
           
-          # Set output usando el método correcto
-          echo "image=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          # Set output usando múltiples métodos
+          echo "image=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
           
           # Verificar que se guardó correctamente
           echo ""
           echo "✅ Image pushed successfully: ${IMAGE_TAG}"
           echo "✅ Setting output 'image' to: ${IMAGE_TAG}"
+          echo ""
+          echo "📝 GITHUB_OUTPUT file location: ${GITHUB_OUTPUT}"
           echo "📝 GITHUB_OUTPUT file contents:"
-          cat $GITHUB_OUTPUT
+          cat "${GITHUB_OUTPUT}" || echo "ERROR: No se pudo leer GITHUB_OUTPUT"
+          echo ""
+          echo "📝 Verificando contenido guardado:"
+          grep "image=" "${GITHUB_OUTPUT}" || echo "ERROR: No se encontró 'image=' en el archivo"
           
       - name: Verify build output
         run: |
           echo "=== Verificación de Output del Build ==="
-          echo "Output 'image' del step anterior: '${{ steps.build_push.outputs.image }}'"
+          echo "📝 GITHUB_OUTPUT path: ${GITHUB_OUTPUT}"
+          echo "📝 GITHUB_OUTPUT contents:"
+          cat "${GITHUB_OUTPUT}" || echo "ERROR: No se pudo leer el archivo"
+          echo ""
+          echo "Output 'image' del step build_push: '${{ steps.build_push.outputs.image }}'"
+          echo "Longitud del output: ${#OUTPUT_IMAGE}"
+          echo ""
+          
           if [ -z "${{ steps.build_push.outputs.image }}" ]; then
-            echo "❌ ERROR: El output 'image' está vacío!"
+            echo "❌ ERROR CRÍTICO: El output 'image' está vacío!"
+            echo ""
+            echo "Debugging adicional:"
+            echo "- GITHUB_OUTPUT está definido: $(test -n "${GITHUB_OUTPUT}" && echo 'sí' || echo 'no')"
+            echo "- GITHUB_OUTPUT file exists: $(test -f "${GITHUB_OUTPUT}" && echo 'sí' || echo 'no')"
+            echo "- Contenido del archivo:"
+            cat "${GITHUB_OUTPUT}" 2>/dev/null || echo "  (no se pudo leer)"
             exit 1
           else
-            echo "✅ Output verificado correctamente"
+            echo "✅ Output verificado correctamente: ${{ steps.build_push.outputs.image }}"
           fi
+        env:
+          OUTPUT_IMAGE: ${{ steps.build_push.outputs.image }}
 
   deploy:
     name: Deploy to GKE
