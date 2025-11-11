@@ -41,14 +41,15 @@ jobs:
 
       - name: Probe WIF credentials
         id: probe_wif
+        if: ${{ steps.auth_wif.outcome == 'success' }}
         continue-on-error: true
         run: |
           set -e
           gcloud --quiet config set project "${PROJECT_ID}"
-          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+          gcloud config get-value account --quiet
 
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.conclusion != 'success' || steps.probe_wif.conclusion != 'success' }}
+        if: ${{ steps.auth_wif.outcome != 'success' || steps.probe_wif.outcome != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
@@ -60,7 +61,7 @@ jobs:
         run: |
           set -e
           echo "Verificando autenticación de gcloud"
-          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" || true)
+          ACTIVE=$(gcloud config get-value account --quiet 2>/dev/null || true)
           if [ -z "$ACTIVE" ]; then
             echo "No hay cuenta activa en gcloud. Verifica WIF (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER) o define GCP_SA_KEY_JSON."
             exit 1
@@ -119,14 +120,15 @@ jobs:
 
       - name: Probe WIF credentials
         id: probe_wif
+        if: ${{ steps.auth_wif.outcome == 'success' }}
         continue-on-error: true
         run: |
           set -e
           gcloud --quiet config set project "${PROJECT_ID}"
-          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+          gcloud config get-value account --quiet
 
       - name: Auth to Google Cloud (JSON key fallback)
-        if: ${{ steps.auth_wif.conclusion != 'success' || steps.probe_wif.conclusion != 'success' }}
+        if: ${{ steps.auth_wif.outcome != 'success' || steps.probe_wif.outcome != 'success' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
@@ -138,7 +140,7 @@ jobs:
         run: |
           set -e
           echo "Verificando autenticación de gcloud"
-          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" || true)
+          ACTIVE=$(gcloud config get-value account --quiet 2>/dev/null || true)
           if [ -z "$ACTIVE" ]; then
             echo "No hay cuenta activa en gcloud. Verifica WIF (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER) o define GCP_SA_KEY_JSON."
             exit 1
