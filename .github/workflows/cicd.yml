@@ -46,6 +46,21 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          set -e
+          echo "Checking Artifact Registry repo '${ARTIFACT_REPO}' in '${REGION}' for project '${PROJECT_ID}'"
+          if ! gcloud artifacts repositories describe "${ARTIFACT_REPO}" --location="${REGION}" --project "${PROJECT_ID}" > /dev/null 2>&1; then
+            echo "Repository not found. Creating..."
+            gcloud artifacts repositories create "${ARTIFACT_REPO}" \
+              --repository-format=docker \
+              --location="${REGION}" \
+              --description="CI/CD repo" \
+              --project "${PROJECT_ID}"
+          else
+            echo "Repository exists."
+          fi
+
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 

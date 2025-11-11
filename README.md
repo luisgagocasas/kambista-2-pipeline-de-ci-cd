@@ -39,5 +39,12 @@ Nota: el workflow intenta autenticarse primero con Workload Identity Federation.
 - IP del Ingress: `kubectl --kubeconfig ./kubeconfig-kanbista.yaml get ingress hello-node-ingress -n kanbista -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`
 - Abre `http://<INGRESS_IP>/`.
 
+#### Comandos en vivo (fundamentales)
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista get ingress hello-node-ingress -w`: observa cambios del Ingress en tiempo real.
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista get pods -w`: ve creación/actualización de pods conforme al rollout.
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista rollout status deploy/hello-node`: sigue el estado del despliegue hasta completar.
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista logs -f deploy/hello-node`: tail de logs de la aplicación durante el despliegue.
+- `kubectl --kubeconfig ./kubeconfig-kanbista.yaml -n kanbista get events --sort-by=.lastTimestamp`: revisa eventos recientes para diagnosticar rápidamente.
+
 ### Borrado (opcional)
 - `terraform -chdir=terraform destroy -auto-approve`
