@@ -3,10 +3,6 @@ name: CI/CD - Build & Deploy to GKE
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Branch a usar para construir"
-        required: true
-        default: "main"
       mensaje_del_dia:
         description: "Mensaje del día (aparece bajo el H1)"
         required: true
@@ -27,8 +23,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Set default namespace
         run: echo "NAMESPACE=${NAMESPACE:-kanbista}" >> $GITHUB_ENV
