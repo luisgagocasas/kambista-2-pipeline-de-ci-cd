@@ -72,11 +72,16 @@ jobs:
     steps:
       - name: Debug - Check build outputs
         run: |
+          IMAGE="${{ needs.build.outputs.image }}"
           echo "=== Verificando outputs del job build ==="
-          echo "needs.build.outputs.image: '${{ needs.build.outputs.image }}'"
-          echo "Longitud: ${#BUILD_IMAGE}"
-        env:
-          BUILD_IMAGE: ${{ needs.build.outputs.image }}
+          echo "Imagen recibida: '${IMAGE}'"
+          echo "Longitud: ${#IMAGE}"
+          echo ""
+          if [ -z "${IMAGE}" ]; then
+            echo "⚠️  ADVERTENCIA: La imagen está vacía"
+          else
+            echo "✅ Imagen válida recibida"
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -176,39 +181,46 @@ jobs:
           kubectl get namespace ${NAMESPACE} || kubectl create namespace ${NAMESPACE}
 
       - name: Deploy to Kubernetes
-        env:
-          IMAGE: ${{ needs.build.outputs.image }}
         run: |
+          IMAGE="${{ needs.build.outputs.image }}"
+          
           echo "=== Información de Deploy ==="
           echo "Imagen a desplegar: ${IMAGE}"
           echo "Namespace: ${NAMESPACE}"
           echo ""
           
           if [ -z "${IMAGE}" ]; then
-            echo "ERROR: La variable IMAGE está vacía"
-            echo "Output del job build: ${{ needs.build.outputs.image }}"
+            echo "❌ ERROR: La variable IMAGE está vacía"
+            echo "Build output recibido: '${{ needs.build.outputs.image }}'"
+            echo "Verifica que el job build haya completado correctamente"
             exit 1
           fi
           
           # Apply namespace
+          echo "Aplicando namespace..."
           kubectl apply -f k8s/namespace.yaml
           
           # Apply service first
+          echo "Aplicando service..."
           kubectl apply -f k8s/service.yaml -n ${NAMESPACE}
           
           # Apply deployment
+          echo "Aplicando deployment..."
           kubectl apply -f k8s/deployment.yaml -n ${NAMESPACE}
           
           # Update the image in deployment
-          echo "Actualizando imagen del deployment..."
+          echo "Actualizando imagen del deployment a: ${IMAGE}"
           kubectl set image deployment/hello-node hello-node="${IMAGE}" -n ${NAMESPACE}
           
           # Apply ingress if exists
           if [ -f k8s/ingress.yaml ]; then
+            echo "Aplicando ingress..."
             kubectl apply -f k8s/ingress.yaml -n ${NAMESPACE}
           fi
           
+          echo ""
           echo "✅ Manifiestos aplicados exitosamente"
+          echo "✅ Imagen desplegada: ${IMAGE}"
 
       - name: Wait for rollout
         run: |
