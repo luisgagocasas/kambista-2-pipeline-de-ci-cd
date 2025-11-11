@@ -4,57 +4,8 @@
 Este proyecto construye y publica la imagen Docker en Artifact Registry y actualiza el deployment en GKE mediante GitHub Actions.
 
 ### Credenciales y configuración
-1. Habilita APIs necesarias en GCP:
-   ```bash
-   export PROJECT_ID="kambista-477721"
-   gcloud services enable iamcredentials.googleapis.com iam.googleapis.com artifactregistry.googleapis.com container.googleapis.com --project "$PROJECT_ID"
-   ```
-2. Obtén el número del proyecto:
-   ```bash
-   export PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-   ```
-3. Crea Workload Identity Pool y Provider para GitHub:
-   ```bash
-   gcloud iam workload-identity-pools create github-pool \
-     --project "$PROJECT_ID" --location=global \
-     --display-name="GitHub Pool"
 
-   gcloud iam workload-identity-pools providers create-oidc github-provider \
-     --project "$PROJECT_ID" --location=global \
-     --workload-identity-pool=github-pool \
-     --display-name="GitHub OIDC" \
-     --issuer-uri="https://token.actions.githubusercontent.com" \
-     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
-
-   # Reemplaza <owner>/<repo> por tu organización/repositorio de GitHub
-   gcloud iam workload-identity-pools providers update-oidc github-provider \
-     --project "$PROJECT_ID" --location=global \
-     --workload-identity-pool=github-pool \
-     --attribute-condition="assertion.repository=='<owner>/<repo>'"
-
-   export WIF_PROVIDER="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-   ```
-4. Crea la cuenta de servicio para GitHub Actions y asigna permisos:
-   ```bash
-   gcloud iam service-accounts create github-actions-deployer \
-     --project "$PROJECT_ID" \
-     --display-name "GitHub Actions Deployer"
-
-   gcloud iam service-accounts add-iam-policy-binding \
-     github-actions-deployer@"$PROJECT_ID".iam.gserviceaccount.com \
-     --project "$PROJECT_ID" \
-     --role "roles/iam.workloadIdentityUser" \
-     --member "principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/<owner>/<repo>"
-
-   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-     --member "serviceAccount:github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com" \
-     --role "roles/artifactregistry.writer"
-
-   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-     --member "serviceAccount:github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com" \
-     --role "roles/container.admin"
-   ```
-5. Crea los secretos en GitHub (Settings → Secrets and variables → Actions):
+Los secretos en GitHub (Settings → Secrets and variables → Actions):
    - `GCP_PROJECT_ID` = `kambista-477721`
    - `GCP_REGION` = `us-central1` (o tu región)
    - `GCP_ARTIFACT_REPO` = `kanbista-apptest5` (o el repo creado por Terraform)
@@ -62,7 +13,7 @@ Este proyecto construye y publica la imagen Docker en Artifact Registry y actual
    - `GKE_LOCATION` = `us-central1-a` (zona) o `us-central1` (región), según Terraform
    - `GCP_WORKLOAD_IDENTITY_PROVIDER` = valor de `$WIF_PROVIDER`
    - `GCP_SERVICE_ACCOUNT` = `github-actions-deployer@kambista-477721.iam.gserviceaccount.com`
-   - (opcional) `K8S_NAMESPACE` si cambias el namespace; por defecto `kanbista`
+   - `K8S_NAMESPACE` el namespace; por defecto `kanbista`
 
 ### Ejecutar el workflow
 1. En GitHub → Actions → "CI/CD - Build & Deploy to GKE" → "Run workflow".
