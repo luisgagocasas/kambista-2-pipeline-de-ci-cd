@@ -6,6 +6,9 @@ on:
       mensaje_del_dia:
         description: "Mensaje del día"
         required: false
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -21,239 +24,113 @@ env:
 
 jobs:
   build:
+    name: Build and Push Docker Image
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.export_image.outputs.image }}
+      image: ${{ steps.build_push.outputs.image }}
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Auth to Google Cloud (Workload Identity Federation)
-        id: auth_wif
-        continue-on-error: true
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Auth to Google Cloud (JSON key fallback)
-        id: auth_json
-        if: steps.auth_wif.outcome != 'success'
-        continue-on-error: true
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Verify Google Cloud authentication
-        run: |
-          set -e
-          echo "Verificando autenticación de gcloud"
-          
-          # Configurar el proyecto
-          gcloud config set project "${PROJECT_ID}" --quiet
-          
-          # Verificar cuenta activa
-          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null || true)
-          
-          if [ -z "$ACTIVE" ]; then
-            echo "❌ Error: No hay cuenta activa en gcloud."
-            echo "Verifica que tengas configurado uno de estos secrets:"
-            echo "  - GCP_WORKLOAD_IDENTITY_PROVIDER + GCP_SERVICE_ACCOUNT (recomendado)"
-            echo "  - GCP_SA_KEY_JSON (fallback)"
-            exit 1
-          fi
-          
-          echo "✅ Autenticado como: $ACTIVE"
-          echo "✅ Proyecto: ${PROJECT_ID}"
-
-      - name: Setup gcloud components
-        run: |
-          gcloud components install gke-gcloud-auth-plugin --quiet || true
-
-      - name: Ensure Artifact Registry repository exists
-        run: |
-          set -e
-          echo "Verificando repositorio '${ARTIFACT_REPO}' en '${REGION}'"
-          
-          if ! gcloud artifacts repositories describe "${ARTIFACT_REPO}" \
-            --location="${REGION}" \
-            --project "${PROJECT_ID}" > /dev/null 2>&1; then
-            
-            echo "📦 Creando repositorio de Artifact Registry..."
-            gcloud artifacts repositories create "${ARTIFACT_REPO}" \
-              --repository-format=docker \
-              --location="${REGION}" \
-              --description="CI/CD repository for Docker images" \
-              --project "${PROJECT_ID}"
-            
-            echo "✅ Repositorio creado exitosamente"
-          else
-            echo "✅ Repositorio ya existe"
-          fi
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - name: Define image tag
-        id: image_tag
         run: |
-          IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/hello-node:${GITHUB_SHA}"
-          echo "IMAGE=$IMAGE_NAME" >> $GITHUB_ENV
-          echo "image=$IMAGE_NAME" >> $GITHUB_OUTPUT
-          echo "🏷️ Imagen: $IMAGE_NAME"
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
-      - name: Setup Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & Push image (linux/amd64)
+      - name: Build and Push Docker Image
+        id: build_push
         run: |
-          echo "🔨 Construyendo imagen para linux/amd64..."
-          docker buildx build \
-            --platform linux/amd64 \
-            --build-arg MENSAJE_DIA="${{ inputs.mensaje_del_dia }}" \
-            -t "${IMAGE}" \
-            -f app/Dockerfile \
-            app \
-            --push
+          IMAGE_TAG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/hello-node:${GITHUB_SHA}"
+          echo "Building image: ${IMAGE_TAG}"
           
-          echo "✅ Imagen construida y publicada exitosamente"
-
-      - name: Export image output
-        id: export_image
-        run: echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+          docker build \
+            --build-arg MENSAJE_DIA="${{ inputs.mensaje_del_dia }}" \
+            -t "${IMAGE_TAG}" \
+            -f app/Dockerfile \
+            app/
+          
+          docker push "${IMAGE_TAG}"
+          
+          echo "image=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "✅ Image pushed successfully: ${IMAGE_TAG}"
 
   deploy:
+    name: Deploy to GKE
     needs: build
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Auth to Google Cloud (Workload Identity Federation)
-        id: auth_wif
-        continue-on-error: true
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Auth to Google Cloud (JSON key fallback)
-        id: auth_json
-        if: steps.auth_wif.outcome != 'success'
-        continue-on-error: true
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Verify Google Cloud authentication
-        run: |
-          set -e
-          echo "Verificando autenticación de gcloud"
-          
-          # Configurar el proyecto
-          gcloud config set project "${PROJECT_ID}" --quiet
-          
-          # Verificar cuenta activa
-          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null || true)
-          
-          if [ -z "$ACTIVE" ]; then
-            echo "❌ Error: No hay cuenta activa en gcloud."
-            echo "Verifica que tengas configurado uno de estos secrets:"
-            echo "  - GCP_WORKLOAD_IDENTITY_PROVIDER + GCP_SERVICE_ACCOUNT (recomendado)"
-            echo "  - GCP_SA_KEY_JSON (fallback)"
-            exit 1
-          fi
-          
-          echo "✅ Autenticado como: $ACTIVE"
-          echo "✅ Proyecto: ${PROJECT_ID}"
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Setup gcloud components
+      - name: Install gke-gcloud-auth-plugin
         run: |
-          gcloud components install gke-gcloud-auth-plugin --quiet || true
-
-      - name: Resolve image
-        run: echo "IMAGE=${{ needs.build.outputs.image }}" >> $GITHUB_ENV
-
-      - name: Resolve GKE cluster location
-        id: resolve_location
-        run: |
-          set -e
-          echo "Resolviendo ubicación del clúster '${CLUSTER_NAME}' en el proyecto '${PROJECT_ID}'"
-          
-          # Primero intentar listar el clúster
-          LOC=$(gcloud container clusters list --project "${PROJECT_ID}" --filter="name=${CLUSTER_NAME}" --format="value(location)" 2>/dev/null || true)
-          
-          # Si no se encuentra, intentar con la ubicación del secret
-          if [ -z "$LOC" ] && [ -n "${CLUSTER_LOCATION}" ]; then
-            # Intentar como región
-            if gcloud container clusters describe "${CLUSTER_NAME}" --region "${CLUSTER_LOCATION}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
-              LOC="${CLUSTER_LOCATION}"
-            # Intentar como zona
-            elif gcloud container clusters describe "${CLUSTER_NAME}" --zone "${CLUSTER_LOCATION}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
-              LOC="${CLUSTER_LOCATION}"
-            fi
-          fi
-          
-          # Validar que se encontró la ubicación
-          if [ -z "$LOC" ]; then
-            echo "❌ Error: Cluster '${CLUSTER_NAME}' no encontrado en el proyecto '${PROJECT_ID}'."
-            echo "Verifica que:"
-            echo "  1. El nombre del cluster es correcto (secret: GKE_CLUSTER_NAME)"
-            echo "  2. El proyecto es correcto (secret: GCP_PROJECT_ID)"
-            echo "  3. La ubicación es correcta (secret: GKE_LOCATION)"
-            exit 1
-          fi
-          
-          echo "✅ Cluster encontrado en: $LOC"
-          echo "CLUSTER_LOCATION_RESOLVED=$LOC" >> $GITHUB_ENV
+          gcloud components install gke-gcloud-auth-plugin --quiet
 
       - name: Get GKE credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
-          cluster_name: ${{ env.CLUSTER_NAME }}
-          location: ${{ env.CLUSTER_LOCATION }}
-
-      - name: Ensure namespace
         run: |
-          echo "Verificando namespace '${NAMESPACE}'..."
-          if kubectl get ns "${NAMESPACE}" >/dev/null 2>&1; then
-            echo "✅ Namespace ya existe"
-          else
-            echo "📦 Creando namespace..."
-            kubectl create ns "${NAMESPACE}"
-            echo "✅ Namespace creado"
-          fi
+          gcloud container clusters get-credentials ${CLUSTER_NAME} \
+            --zone=${CLUSTER_LOCATION} \
+            --project=${PROJECT_ID}
 
-      - name: Apply Kubernetes manifests
+      - name: Verify kubectl access
         run: |
-          echo "📝 Aplicando manifiestos de Kubernetes..."
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl get namespace ${NAMESPACE} || kubectl create namespace ${NAMESPACE}
+
+      - name: Deploy to Kubernetes
+        run: |
+          IMAGE="${{ needs.build.outputs.image }}"
           
-          # Aplicar namespace.yaml si existe
-          if [ -f k8s/namespace.yaml ]; then
-            kubectl apply -f k8s/namespace.yaml || true
-          fi
+          # Apply namespace
+          kubectl apply -f k8s/namespace.yaml
           
-          # Aplicar deployment
-          kubectl -n "${NAMESPACE}" apply -f k8s/deployment.yaml
-          echo "✅ Deployment aplicado"
+          # Update deployment image
+          kubectl set image deployment/hello-node hello-node="${IMAGE}" -n ${NAMESPACE} || true
           
-          # Aplicar service
-          kubectl -n "${NAMESPACE}" apply -f k8s/service.yaml
-          echo "✅ Service aplicado"
+          # Apply all manifests
+          kubectl apply -f k8s/deployment.yaml -n ${NAMESPACE}
+          kubectl apply -f k8s/service.yaml -n ${NAMESPACE}
           
-          # Aplicar ingress si existe
+          # Apply ingress if exists
           if [ -f k8s/ingress.yaml ]; then
-            kubectl -n "${NAMESPACE}" apply -f k8s/ingress.yaml || true
-            echo "✅ Ingress aplicado"
+            kubectl apply -f k8s/ingress.yaml -n ${NAMESPACE}
           fi
-
-      - name: Update deployment image
-        run: |
-          echo "Actualizando imagen a: ${IMAGE}"
-          kubectl -n "${NAMESPACE}" set image deployment/hello-node hello-node="${IMAGE}"
-          kubectl -n "${NAMESPACE}" rollout status deployment/hello-node --timeout=300s
           
-          echo "✅ Deployment actualizado exitosamente"
-          echo "Pods activos:"
-          kubectl -n "${NAMESPACE}" get pods -l app=hello-node
+          # Update image in deployment
+          kubectl set image deployment/hello-node hello-node="${IMAGE}" -n ${NAMESPACE}
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/hello-node -n ${NAMESPACE} --timeout=300s
+
+      - name: Get deployment status
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment hello-node -n ${NAMESPACE}
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n ${NAMESPACE} -l app=hello-node
+          echo ""
+          echo "=== Service ==="
+          kubectl get service hello-node -n ${NAMESPACE}
